@@ -1,6 +1,7 @@
 module Main where
 
-import qualified MyLib 
+import qualified Sim
+import qualified Parse
 
 main :: IO ()
 main = do

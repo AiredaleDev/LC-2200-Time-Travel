@@ -1,4 +1,4 @@
-module Sim (loadProgram) where
+module Sim (loadProgram, advance, rewind) where
 
 import Data.Bits
 import Data.Int (Int32)
@@ -37,12 +37,12 @@ data Reg =
   | Ra
   deriving (Show, Eq, Enum)
 
--- | Step in 
+-- | Represents a state change for a given clock cycle. 
 data StateChange =
   RegisterUpdate Reg Int32 -- reg old_val
   | MemoryUpdate Int Int32 -- index old
-  | Jump Int -- pcoffset
-  | Subroutine Reg Reg Int -- for jalr, which simultaneously jumps and updates registers. SR ra at currpc
+  | Jump Int -- oldpc
+  | Subroutine Reg Int Int32 -- for jalr, which simultaneously jumps and updates registers. SR ra old_pc old_ra
   | Halt -- signals to debugger to stop
   deriving Show
   
@@ -75,17 +75,17 @@ advance (lc, history) =
     0x4 -> -- Sw
       write_mem
     0x5 -> -- Br
-      (lc { pc = pc lc + off }, Jump off : history) 
+      (lc { pc = pc lc + off }, Jump (pc lc) : history) 
     0x6 -> -- Jalr
       (lc { pc = fromIntegral ry_data
           , regFile = V.modify (\regs -> write regs rx (fromIntegral $ pc lc)) (regFile lc) 
           }
-      , Subroutine (toEnum rx) (toEnum ry) (pc lc) : history)
+      , Subroutine (toEnum rx) (pc lc) rx_data : history)
     0x7 -> -- Halt
       (lc, Halt : history)
     0x8 -> -- Blt
       let (pc_off, hist) = if rx_data < ry_data
-                           then (off, Jump off : history)
+                           then (off, Jump (pc lc) : history)
                            else (0, history)
       in
       (lc { pc = pc lc + pc_off }, hist)
@@ -146,10 +146,12 @@ stepBack lc event =
       lc { pc = pc lc - 1
          , memory = V.modify (\mem -> write mem idx prev_val) (memory lc)
          }
-    Jump pc_off ->
-      lc { pc = pc lc - pc_off }
-    Subroutine ra at pc_off ->
-      undefined -- TODO
+    Jump old_pc ->
+      lc { pc = old_pc }
+    Subroutine ra old_pc old_ra ->
+      lc { pc = old_pc
+         , regFile = V.modify (\regs -> write regs (fromEnum reg) old_ra) (regFile lc)
+         }
     Halt ->
       lc -- Halting does not change lc at all, so this just consumes the event.
 
