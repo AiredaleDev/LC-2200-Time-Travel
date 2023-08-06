@@ -150,7 +150,7 @@ stepBack lc event =
       lc { pc = old_pc }
     Subroutine ra old_pc old_ra ->
       lc { pc = old_pc
-         , regFile = V.modify (\regs -> write regs (fromEnum reg) old_ra) (regFile lc)
+         , regFile = V.modify (\regs -> write regs (fromEnum ra) old_ra) (regFile lc)
          }
     Halt ->
       lc -- Halting does not change lc at all, so this just consumes the event.
